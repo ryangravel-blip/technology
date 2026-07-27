@@ -324,6 +324,7 @@ const Q = {
            SUM(AMT) as AMT
     FROM load.finance_sandbox.mrp_financials
     WHERE MONTH_END_DT >= DATEADD('month',-12,LAST_DAY(DATEADD('month',-1,CURRENT_DATE())))
+      AND MONTH_END_DT <= LAST_DAY(DATEADD('month',-1,CURRENT_DATE()))
       AND C_PL_INCLUDE = TRUE
       AND C_PARENT_DEPT IN ('Engineering','Product','COGS: Infrastructure')
     GROUP BY MONTH_END_DT,ACCOUNT_TYPE,C_PARENT_DEPT,C_PL_CLASS,C_EXPENSE_CATEGORY
@@ -389,6 +390,7 @@ const Q = {
            SUM(AMT) as AMT
     FROM load.finance_sandbox.mrp_financials
     WHERE MONTH_END_DT >= DATEADD('month',-12,LAST_DAY(DATEADD('month',-1,CURRENT_DATE())))
+      AND MONTH_END_DT <= LAST_DAY(DATEADD('month',-1,CURRENT_DATE()))
       AND C_PL_INCLUDE = TRUE
       AND C_PARENT_DEPT IN ('Engineering','Product','COGS: Infrastructure')
       AND C_EXPENSE_CATEGORY IN ('SaaS Tooling','Hosting Fees')
