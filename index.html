@@ -123,7 +123,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <button class="tab-btn active" onclick="switchTab('exp',this)">P&amp;L by Expense</button>
   <button class="tab-btn" onclick="switchTab('dept',this)">P&amp;L by Department</button>
   <button class="tab-btn" onclick="switchTab('hc',this)">Headcount</button>
-  <button class="tab-btn" onclick="switchTab('saas',this)">SaaS Tooling</button>
+  <button class="tab-btn" onclick="switchTab('saas',this)">Vendors</button>
   <button class="tab-btn" onclick="switchTab('hosting',this)">Hosting Fees</button>
   <button class="tab-btn" onclick="switchTab('hostttm',this)">Hosting TTM</button>
 </div>
@@ -173,7 +173,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <!-- SAAS TOOLING BY VENDOR -->
 <div id="tab-saas" class="tab-panel">
 <div class="table-card">
-  <div class="table-title">SaaS Tooling — Budget vs Actuals by Vendor <span class="bud-badge">Budget: FY27 BoD Approved</span></div>
+  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+    <div class="table-title" style="margin:0">Vendors — Budget vs Actuals <span class="bud-badge">Budget: FY27 BoD Approved</span></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+      <label style="font-size:12px;color:#9ba3af">Category</label>
+      <select id="vendorCatFilter" onchange="buildVendors(_vAct,_vBud)" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#1f2937;color:#f3f4f6;cursor:pointer">
+        <option value="All">All categories</option>
+        <option value="SaaS Tooling">SaaS Tooling</option>
+        <option value="Hosting Fees">Hosting Fees</option>
+      </select>
+      <label style="font-size:12px;color:#9ba3af">Dept</label>
+      <select id="vendorDeptFilter" onchange="buildVendors(_vAct,_vBud)" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#1f2937;color:#f3f4f6;cursor:pointer">
+        <option value="All">All depts</option>
+        <option value="Engineering">Engineering</option>
+        <option value="Product">Product</option>
+        <option value="COGS: Infrastructure">COGS: Infrastructure</option>
+      </select>
+    </div>
+  </div>
   <div style="overflow-x:auto"><table class="data-table">
     <thead id="saasHead"></thead>
     <tbody id="saasBody"><tr><td class="label-col" colspan="13" style="color:#9ba3af;padding:20px">Loading…</td></tr></tbody>
@@ -677,7 +694,38 @@ function preProcessVendorActuals(rows) {
         map[v] = (map[v]||0) + a;
     return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
   };
-  return {data, sumByVendor, sumByDeptVendor, vendorList, deptVendorList};
+  // vendorListFiltered(cat, dept) — 'All' wildcards both dims, sorted by total desc
+  const vendorListFiltered = (cat, dept) => {
+    const map = {};
+    for (const dtData of Object.values(data)) {
+      const depts = dept === 'All' ? Object.keys(dtData) : [dept];
+      for (const d of depts) {
+        if (!dtData[d]) continue;
+        const cats = cat === 'All' ? Object.keys(dtData[d]) : [cat];
+        for (const c of cats) {
+          if (!dtData[d][c]) continue;
+          for (const [v,a] of Object.entries(dtData[d][c]))
+            map[v] = (map[v]||0) + a;
+        }
+      }
+    }
+    return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
+  };
+  // sumFiltered(mths, cat, dept, vendor) — 'All' wildcards
+  const sumFiltered = (mths, cat, dept, vendor) => mths.reduce((s,dt) => {
+    if (!data[dt]) return s;
+    const depts = dept === 'All' ? Object.keys(data[dt]) : [dept];
+    for (const d of depts) {
+      if (!data[dt][d]) continue;
+      const cats = cat === 'All' ? Object.keys(data[dt][d]) : [cat];
+      for (const c of cats) {
+        if (!data[dt][d][c]) continue;
+        s += data[dt][d][c][vendor] || 0;
+      }
+    }
+    return s;
+  }, 0);
+  return {data, sumByVendor, sumByDeptVendor, vendorList, deptVendorList, vendorListFiltered, sumFiltered};
 }
 
 function preProcessVendorBudget(rows) {
@@ -719,28 +767,64 @@ function preProcessVendorBudget(rows) {
         map[v] = (map[v]||0) + a;
     return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
   };
-  return {data, sumByVendor, sumByDeptVendor, vendorList, deptVendorList};
+  const vendorListFiltered = (cat, dept) => {
+    const map = {};
+    for (const dtData of Object.values(data)) {
+      const depts = dept === 'All' ? Object.keys(dtData) : [dept];
+      for (const d of depts) {
+        if (!dtData[d]) continue;
+        const cats = cat === 'All' ? Object.keys(dtData[d]) : [cat];
+        for (const c of cats) {
+          if (!dtData[d][c]) continue;
+          for (const [v,a] of Object.entries(dtData[d][c]))
+            map[v] = (map[v]||0) + a;
+        }
+      }
+    }
+    return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
+  };
+  const sumFiltered = (mths, cat, dept, vendor) => mths.reduce((s,dt) => {
+    if (!data[dt]) return s;
+    const depts = dept === 'All' ? Object.keys(data[dt]) : [dept];
+    for (const d of depts) {
+      if (!data[dt][d]) continue;
+      const cats = cat === 'All' ? Object.keys(data[dt][d]) : [cat];
+      for (const c of cats) {
+        if (!data[dt][d][c]) continue;
+        s += data[dt][d][c][vendor] || 0;
+      }
+    }
+    return s;
+  }, 0);
+  return {data, sumByVendor, sumByDeptVendor, vendorList, deptVendorList, vendorListFiltered, sumFiltered};
 }
 
-// ── BUILD: SAAS TOOLING ───────────────────────────────
-function buildSaaS(vAct, vBud) {
+// ── BUILD: SAASTOOLING ───────────────────────────────
+let _vAct, _vBud;
+function buildVendors(vAct, vBud) {
+  if (vAct) _vAct = vAct;
+  if (vBud) _vBud = vBud;
+  if (!_vAct || !_vBud) return;
+  const cat  = document.getElementById('vendorCatFilter')?.value  || 'All';
+  const dept = document.getElementById('vendorDeptFilter')?.value || 'All';
   document.getElementById('saasHead').innerHTML = makeHead9('260px');
-  const cat = 'SaaS Tooling';
-  const allVendors = [...new Set([...vAct.vendorList(cat), ...vBud.vendorList(cat)])];
-  const vendors = allVendors.filter(v => {
-    return Math.abs(vAct.sumByVendor(YTD,cat,v)) + Math.abs(vBud.sumByVendor(YTD,cat,v)) > 10;
-  });
+  const allVendors = [...new Set([..._vAct.vendorListFiltered(cat, dept), ..._vBud.vendorListFiltered(cat, dept)])];
+  const vendors = allVendors.filter(v =>
+    Math.abs(_vAct.sumFiltered(YTD, cat, dept, v)) + Math.abs(_vBud.sumFiltered(YTD, cat, dept, v)) > 10
+  );
+  const totalLabel = cat === 'All' ? 'Total — All Vendors' : `Total — ${cat}`;
   let h='', mTA=0,mTB=0,qTA=0,qTB=0,yTA=0,yTB=0;
   for (const v of vendors) {
-    const mA=vAct.sumByVendor([CURRENT],cat,v), mB=vBud.sumByVendor([CURRENT],cat,v);
-    const qA=vAct.sumByVendor(QTD,cat,v),       qB=vBud.sumByVendor(QTD,cat,v);
-    const yA=vAct.sumByVendor(YTD,cat,v),       yB=vBud.sumByVendor(YTD,cat,v);
+    const mA=_vAct.sumFiltered([CURRENT],cat,dept,v), mB=_vBud.sumFiltered([CURRENT],cat,dept,v);
+    const qA=_vAct.sumFiltered(QTD,cat,dept,v),       qB=_vBud.sumFiltered(QTD,cat,dept,v);
+    const yA=_vAct.sumFiltered(YTD,cat,dept,v),       yB=_vBud.sumFiltered(YTD,cat,dept,v);
     mTA+=mA;mTB+=mB;qTA+=qA;qTB+=qB;yTA+=yA;yTB+=yB;
     h+=row9(v, mA/1e3, mB/1e3, qA/1e3, qB/1e3, yA/1e3, yB/1e3, {varDir:-1});
   }
-  h+=row9('Total SaaS Tooling', mTA/1e3, mTB/1e3, qTA/1e3, qTB/1e3, yTA/1e3, yTB/1e3, {cls:'row-total',varDir:-1,fmtFn:KD});
+  h+=row9(totalLabel, mTA/1e3, mTB/1e3, qTA/1e3, qTB/1e3, yTA/1e3, yTB/1e3, {cls:'row-total',varDir:-1,fmtFn:KD});
   document.getElementById('saasBody').innerHTML = h;
 }
+function buildSaaS(vAct, vBud) { buildVendors(vAct, vBud); }
 
 // ── BUILD: HOSTING FEES BY VENDOR + DEPT ─────────────
 function buildHosting(vAct, vBud) {
