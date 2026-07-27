@@ -158,9 +158,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <div class="chart-card"><div class="chart-title">Headcount Bridge — Current Month</div><canvas id="hcBridgeChart" height="140"></canvas></div>
   <div class="chart-card"><div class="chart-title">Headcount by Department</div><canvas id="hcDeptChart" height="140"></canvas></div>
 </div>
-<div class="charts-row">
-  <div class="chart-card wide"><div class="chart-title">Headcount Trend — Last 12 Months</div><canvas id="hcTrendChart" height="120"></canvas></div>
-</div>
 <div class="table-card">
   <div class="table-title">Headcount Overview — Engineering Org <span class="bud-badge">Budget: FY27 BoD Approved</span></div>
   <div style="overflow-x:auto"><table class="data-table">
@@ -606,22 +603,17 @@ function buildHeadcount(hcRows, hcBridgeRows, hcBudRows) {
   const curMn=CURRENT?moName[+CURRENT.slice(5,7)]:'EOP';
   const prevMn=PREV?moName[+PREV.slice(5,7)]:'BOP';
 
+  const totEOP = totMay + hires - vol - inv;
   drawWF('hcBridgeChart',
     [`BOP (${prevMn})`,'+Hires','−Voluntary','−Involuntary',`EOP (${curMn})`],
-    [{t:'start',v:totApr,c:BRAND.lime},{t:'inc',v:hires},{t:'dec',v:vol},{t:'dec',v:inv},{t:'end',v:totMay}],
-    {yMin:Math.max(0,totMay-20),yMax:totApr+10}
+    [{t:'start',v:totMay,c:BRAND.lime},{t:'inc',v:hires},{t:'dec',v:vol},{t:'dec',v:inv},{t:'end',v:totEOP}],
+    {yMin:Math.max(0,totEOP-20),yMax:totMay+Math.max(hires,10)+5}
   );
   drawBar('hcDeptChart',
     DEPTS.map(d=>d.replace('COGS: ','')),
     [{label:curMn,data:DEPTS.map(d=>(byDept[d]||{may:0}).may),backgroundColor:C_ACT,borderRadius:3}],
     {formatter:v=>v.toString()}
   );
-  const trendLabels=['Jun-25','Jul-25','Aug-25','Sep-25','Oct-25','Nov-25','Dec-25','Jan-26','Feb-26','Mar-26','Apr-26','May-26'];
-  new Chart(document.getElementById('hcTrendChart'),{
-    type:'line',
-    data:{labels:trendLabels,datasets:[{label:'Total Headcount',data:trendTotals,borderColor:BRAND.teal,backgroundColor:'rgba(128,199,209,0.12)',fill:true,borderWidth:2.5,tension:0.3,pointBackgroundColor:BRAND.teal,pointBorderColor:'#fff',pointBorderWidth:2,pointRadius:5}]},
-    options:{responsive:true,layout:{padding:{top:16}},plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f1f5f9'},min:Math.max(0,Math.min(...trendTotals)-20),ticks:{callback:v=>N(v)}}}}
-  });
 }
 
 // ── VENDOR PRE-PROCESS ────────────────────────────────
