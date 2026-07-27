@@ -179,8 +179,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       <label style="font-size:12px;color:#9ba3af">Category</label>
       <select id="vendorCatFilter" onchange="buildVendors(_vAct,_vBud)" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#1f2937;color:#f3f4f6;cursor:pointer">
         <option value="All">All categories</option>
-        <option value="SaaS Tooling">SaaS Tooling</option>
-        <option value="Hosting Fees">Hosting Fees</option>
       </select>
       <label style="font-size:12px;color:#9ba3af">Dept</label>
       <select id="vendorDeptFilter" onchange="buildVendors(_vAct,_vBud)" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #374151;background:#1f2937;color:#f3f4f6;cursor:pointer">
@@ -805,7 +803,22 @@ function buildVendors(vAct, vBud) {
   if (vAct) _vAct = vAct;
   if (vBud) _vBud = vBud;
   if (!_vAct || !_vBud) return;
-  const cat  = document.getElementById('vendorCatFilter')?.value  || 'All';
+
+  // Populate category dropdown from data on first load
+  const catSel = document.getElementById('vendorCatFilter');
+  if (catSel && catSel.options.length <= 1) {
+    const cats = [...new Set([
+      ...(Object.values(_vAct.data).flatMap(depts => Object.values(depts).flatMap(cats => Object.keys(cats)))),
+      ...(Object.values(_vBud.data).flatMap(depts => Object.values(depts).flatMap(cats => Object.keys(cats))))
+    ])].filter(Boolean).sort();
+    cats.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      catSel.appendChild(o);
+    });
+  }
+
+  const cat  = catSel?.value  || 'All';
   const dept = document.getElementById('vendorDeptFilter')?.value || 'All';
   document.getElementById('saasHead').innerHTML = makeHead9('260px');
   const allVendors = [...new Set([..._vAct.vendorListFiltered(cat, dept), ..._vBud.vendorListFiltered(cat, dept)])];
