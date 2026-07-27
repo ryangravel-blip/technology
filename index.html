@@ -840,7 +840,8 @@ async function loadAll() {
     [hcData, hcBData, hcBudData, vActData, vBudData] = await Promise.all([
       execSQL(Q.headcount), execSQL(Q.hcBridge), execSQL(Q.hcBudgetDept),
       execSQL(Q.vendorActuals), execSQL(Q.vendorBudget)
-    ]);sg.textContent = 'Building dashboard…';
+    ]);
+    msg.textContent = 'Building dashboard…';
 
     // Set periods from actuals date range
     const months = [...new Set(finData.map(r=>r.MONTH_END_DT.slice(0,10)))].sort();
