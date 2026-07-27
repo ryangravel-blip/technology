@@ -402,7 +402,7 @@ const Q = {
            COALESCE(ACCOUNT_NAME,'') as ACCOUNT_NAME,
            COALESCE(VENDOR,'') as VENDOR,
            SUM(VALUE) as BUDGET
-    FROM load.finance_sandbox.mrp_forecast
+    FROM load.finance_sandbox.mrp_vendor_forecast
     WHERE VERSION_NAME = '2026.3.6 - FY27 Final BoD Approved'
       AND C_PL_INCLUDE = 1
       AND C_PARENT_DEPT IN ('Engineering','Product','COGS: Infrastructure')
