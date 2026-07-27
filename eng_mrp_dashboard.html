@@ -303,25 +303,139 @@ function secRow(label) { return `<tr class="row-section"><td class="label-col" c
 function spacer()      { return `<tr class="row-spacer"><td colspan="13"></td></tr>`; }
 
 // ── SQL EXECUTION ─────────────────────────────────────
+// ── SNOWFLAKE DIRECT CONNECTION ─────────────────────────────────────────────
+const SF_ACCOUNT    = 'xpahnkf-amperity_data_warehouse';
+const SF_ACCOUNT_UC = 'XPAHNKF-AMPERITY_DATA_WAREHOUSE';
+const SF_USER       = 'RYAN.GRAVEL@AMPERITY.COM';
+const SF_WAREHOUSE  = 'READ';
+const SF_ROLE       = 'FINANCE_SU';
+const SF_PUB_KEY_FP = 'SHA256:3/MdtULEL8+IQXk31L3KSSHiRRVJR7h2NYX2PVgQcuw=';
+const SF_PRIVATE_KEY_PEM = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCrW70fxjeHxVhL
+MQq4XouRk4mcjZWM1McNgDHEd76KVS24euDaSZguobvy9U4aquytiW4OG8Km4grO
+HGG5TdVVgzUvJY6F3l8hW8g/nYB5Cu1Ee3XWRC1OpOEWFVrq3FX6GuOloXX9xlDW
+GaaDE/IWUAyatZa+4Rqqh+khl1/q2PCHcFuXtMoEEpZ7KgOpT3CXn4duUdMH8xlv
+4J+mak9TOzoQUTe0RiUXy15Xnc7RDJv8WgNK55MQhArCaCJr9WKFSlFYvUmSFmOy
+DK/Dbj8jH+jxrCAckcANEaiwaBkB6FEtHjpOCGgHVT97T3r8lSOC7jRPGIS/hzEQ
+4dSEZJ3RAgMBAAECggEAJDHtgc+pnRkXLFLAk+8MhgRm9dWGOEgdf4GLgZdVfPy+
++o+h/Rm8dmUdQRWFmOZvtbworfw5ImzuoVinX6/MFxLu4fWJ5EbzSyWK570KDQc8
+1NFLM6YU996l2LdMC/3cf0a8vRicxqzkGEU0wc0tvn7MGsWugMUlj83DdZ/217EA
+qQMDqW1k8YqkCPA8FesXlyIPAi5NNEYx6It62h2i+vsvPvCrBOU7e1MXIGsTyNGQ
+vUyz8oFRM/X3O4E/J/KsffcHLqbKEk/rg4mfGHYCiV/164lbFHPLJuD5jd/DDad+
+al/7SunbhDTqIbwTLCqbVmsaQBoVOePC1QNYATI5LQKBgQDTihxwCPmH2AmqMHTe
+eQTkM5hfi+ZiS2uiQUtQJun1sjFfm20usVSVyj2cV/oq8zzLVOmo41MX6SQ0i+c7
+9kfwjc30FO2ivPkLtg207hfJ94wNhKQ4CrbPYi1zRJtfHNSqOEE1LFWo5ePJ4d77
+9w72hTNCSFwCRGuaK9W0QUFVvwKBgQDPX64d9imQHyJlVkLD1o80MWZ8MKiEFovT
+mMgtfyjSC3HatpRxD89lYySiehjFi1g1uKqQmqJy4dsNf6KG5vgq7ET0zaQIFfhX
+myUoB2pDi8500SW+NHVKdSXs1qWiEWnBOBjQe9SxJg76M46fhyozQoQ2Qxd4n+QK
+kr/z3muQbwKBgQCrvAMsPUz/KLdn8GDgwBTlgrGgV/5YLGycVC/lSUJFEj4dJRx1
+fMdzt7Ve+NmDBueDF1N+pdauobqf4jh+qIls1GKwVlE5/fqdtFXaXjT35T1ROC7t
+xFz3bfgCDV+pzskjy/m8RlrgfIn6OqIBomgGYMrlc8MmoA9PIWkkJpn5FwKBgQCP
+SrkAoQklOi5FQa7OreK0GPKNG/5Fj2K9KpQfw/8L7LaWf5Tg7yDLGQ/GaYHWdqvU
+Ky9IzmEz6ta3ZBuFBfIzjqEzWyleIPhCaMTq/PyzgdZ+J8rhvFPTyFEVb1hyPYAK
+8F1NKlPUuMyenKOPnhFN7Ed5SzDbu/gSSkbzFxzSZwKBgFntg2nZcAiC3UVEX+k6
+EW9GjC+LhjodVIPea5ywGFYHnI8ahFkprt8bQbR2vF9p9XENbBPeWZKBLskSFBEm
+QSw2N15JC8q0hdqUnH+rJXNHAlGAq4agi1gUZBs/jwAre3/g1r12qjoAoIJq7oRd
+hyOGwXQrZ67pjmQCGfnp3a2C
+-----END PRIVATE KEY-----`;
+
+let _sfCachedJWT = null;
+let _sfJWTExpiry = 0;
+
+function b64url(str) {
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function getSnowflakeJWT() {
+  if (_sfCachedJWT && Date.now() < _sfJWTExpiry) return _sfCachedJWT;
+  const pemBody = SF_PRIVATE_KEY_PEM.replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '').replace(/\s+/g, '');
+  const der = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
+  const privKey = await crypto.subtle.importKey(
+    'pkcs8', der.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign']
+  );
+  const now = Math.floor(Date.now() / 1000);
+  const iss = `${SF_ACCOUNT_UC}.${SF_USER}.${SF_PUB_KEY_FP}`;
+  const sub = `${SF_ACCOUNT_UC}.${SF_USER}`;
+  const header  = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const payload = b64url(JSON.stringify({ iss, sub, iat: now, exp: now + 3600 }));
+  const sigBuf = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5', privKey,
+    new TextEncoder().encode(`${header}.${payload}`)
+  );
+  const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  _sfCachedJWT = `${header}.${payload}.${sig}`;
+  _sfJWTExpiry = (now + 3500) * 1000;
+  return _sfCachedJWT;
+}
+
+async function execSQLDirect(sql) {
+  const jwt = await getSnowflakeJWT();
+  const url = `https://${SF_ACCOUNT}.snowflakecomputing.com/api/v2/statements`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+      'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      statement: sql,
+      warehouse: SF_WAREHOUSE,
+      role: SF_ROLE,
+      timeout: 120
+    })
+  });
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw new Error(`Snowflake ${resp.status}: ${txt.slice(0, 400)}`);
+  }
+  let result = await resp.json();
+  // Poll for async query completion
+  while (result.statementHandle && result.status !== 'success') {
+    if (result.status === 'failed') throw new Error(`Query failed: ${result.message}`);
+    await new Promise(r => setTimeout(r, 1000));
+    const pollJWT = await getSnowflakeJWT();
+    const poll = await fetch(
+      `https://${SF_ACCOUNT}.snowflakecomputing.com/api/v2/statements/${result.statementHandle}`,
+      { headers: { 'Authorization': `Bearer ${pollJWT}`, 'X-Snowflake-Authorization-Token-Type': 'KEYPAIR_JWT' } }
+    );
+    result = await poll.json();
+  }
+  const cols = result.resultSetMetaData.rowType.map(c => c.name);
+  return result.data.map(row => { const o = {}; cols.forEach((c, i) => { o[c] = row[i]; }); return o; });
+}
+
 async function execSQL(sql) {
-  // Poll until window.cowork is injected — up to 30s
-  const deadline = Date.now() + 30000;
-  while (!window.cowork?.callMcpTool) {
-    if (Date.now() > deadline) throw new Error('Timed out waiting for Snowflake connector (30s). Try refreshing.');
+  // Try Cowork MCP first (5s window)
+  const deadline = Date.now() + 5000;
+  while (!window.cowork?.callMcpTool && Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 200));
   }
-  const raw = await window.cowork.callMcpTool('mcp__2c211ab0-a702-4355-9d71-4acf3f0ad8d5__sql_exec_tool', { sql });
-  let jsonStr;
-  if (typeof raw === 'string') jsonStr = raw;
-  else if (Array.isArray(raw)) { const b = raw.find(c=>c.type==='text'); jsonStr = b?b.text:JSON.stringify(raw); }
-  else if (raw?.content) { const b = Array.isArray(raw.content)?raw.content.find(c=>c.type==='text'):null; jsonStr = b?b.text:JSON.stringify(raw.content); }
-  else jsonStr = JSON.stringify(raw);
-  let p;
-  try { p = JSON.parse(jsonStr); } catch(e) { throw new Error('SQL parse error: ' + jsonStr.slice(0,200)); }
-  if (p.error || p.message?.startsWith?.('MCP')) throw new Error(p.error || p.message);
-  const rs = p.result_set || p;
-  const cols = rs.resultSetMetaData.rowType.map(c=>c.name);
-  return rs.data.map(row => { const o={}; cols.forEach((c,i)=>{ o[c]=row[i]; }); return o; });
+  if (window.cowork?.callMcpTool) {
+    try {
+      const raw = await window.cowork.callMcpTool('mcp__2c211ab0-a702-4355-9d71-4acf3f0ad8d5__sql_exec_tool', { sql });
+      let jsonStr;
+      if (typeof raw === 'string') jsonStr = raw;
+      else if (Array.isArray(raw)) { const b = raw.find(c=>c.type==='text'); jsonStr = b?b.text:JSON.stringify(raw); }
+      else if (raw?.content) { const b = Array.isArray(raw.content)?raw.content.find(c=>c.type==='text'):null; jsonStr = b?b.text:JSON.stringify(raw.content); }
+      else jsonStr = JSON.stringify(raw);
+      let p;
+      try { p = JSON.parse(jsonStr); } catch(e) { throw new Error('SQL parse error: ' + jsonStr.slice(0,200)); }
+      if (p.error || p.message?.startsWith?.('MCP')) throw new Error(p.error || p.message);
+      const rs = p.result_set || p;
+      const cols = rs.resultSetMetaData.rowType.map(c=>c.name);
+      return rs.data.map(row => { const o={}; cols.forEach((c,i)=>{ o[c]=row[i]; }); return o; });
+    } catch(mcpErr) {
+      console.warn('MCP failed, falling back to direct Snowflake:', mcpErr.message);
+    }
+  }
+  // Fall back to direct Snowflake REST API
+  return execSQLDirect(sql);
 }
 
 // ── QUERIES ───────────────────────────────────────────
